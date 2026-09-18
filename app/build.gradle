@@ -24,9 +24,11 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    lint { abortOnError false }
+    lint {
+        abortOnError false
+    }
 }
 
 dependencies {
-    // Stubs are in source, no external jar needed
+    // Using source stubs for Xposed API
 }

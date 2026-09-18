@@ -28,14 +28,12 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // Avoid some lint issues
     lint {
         abortOnError false
+        checkReleaseBuilds false
     }
 }
 
 dependencies {
-    // Try compileOnly first
-    compileOnly 'de.robv.android.xposed:api:82'
-    // Fallback comment: if fails, user can put api-82.jar into app/libs/
+    compileOnly files('libs/api-82.jar')
 }

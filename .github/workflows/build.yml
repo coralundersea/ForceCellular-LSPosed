@@ -19,37 +19,31 @@ jobs:
 
       - name: Install Android commandlinetools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
           unzip -q cmdtools.zip
           mv cmdline-tools latest
           export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
-          yes | sdkmanager --licenses || true
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
 
       - name: Create local.properties
-        run: |
-          echo "sdk.dir=$HOME/android-sdk" > local.properties
-          cat local.properties
+        run: echo "sdk.dir=$HOME/android-sdk" > local.properties
 
       - name: Build Debug APK
         run: |
-          chmod +x gradlew || true
-          export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-          ./gradlew assembleDebug --stacktrace --continue || true
-          echo "=== Looking for APK ==="
-          find . -name "*.apk" -type f 2>/dev/null || true
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+          echo "=== APK files ==="
+          find . -name "*.apk" -type f
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ForceCellular-APK
-          path: '**/*.apk'
-          if-no-files-found: warn
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

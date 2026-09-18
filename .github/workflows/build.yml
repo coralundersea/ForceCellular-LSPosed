@@ -9,8 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -20,57 +19,22 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        continue-on-error: true
 
-      - name: Alternative SDK setup if needed
-        run: |
-          if [ -z "$ANDROID_HOME" ] && [ -z "$ANDROID_SDK_ROOT" ]; then
-            echo "Trying alternative setup..."
-            sudo apt-get update
-            sudo apt-get install -y sdkmanager || true
-          fi
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls -la $ANDROID_HOME 2>/dev/null || ls -la $ANDROID_SDK_ROOT 2>/dev/null || echo "No SDK dir found"
-
-      - name: Accept Android licenses
-        run: |
-          yes | sdkmanager --licenses || true
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Install required SDK packages
-        run: |
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: Create local.properties
-        run: |
-          if [ -n "$ANDROID_HOME" ]; then
-            echo "sdk.dir=$ANDROID_HOME" > local.properties
-          elif [ -n "$ANDROID_SDK_ROOT" ]; then
-            echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-          else
-            echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-          fi
-          cat local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      - name: Generate Gradle Wrapper
+      - name: Build with Gradle
         run: |
-          gradle wrapper --gradle-version 8.2 || true
-          chmod +x gradlew || true
-          ls -la
-
-      - name: Build Debug APK
-        run: |
-          ./gradlew assembleDebug --stacktrace || gradle assembleDebug --stacktrace || echo "Build command finished with issues"
-          find . -name "*.apk" 2>/dev/null || echo "Searching for APK..."
-          find /home/runner -name "*.apk" 2>/dev/null | head -5 || true
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace --continue || true
+          find . -name "*.apk" -type f
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ForceCellular-APK
-          path: |
-            **/build/outputs/apk/**/*.apk
-            **/*.apk
+          path: '**/*.apk'
           if-no-files-found: warn

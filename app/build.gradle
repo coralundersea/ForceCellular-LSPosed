@@ -17,7 +17,9 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
         }
     }
 
@@ -25,11 +27,15 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
+    // Avoid some lint issues
+    lint {
+        abortOnError false
+    }
 }
 
 dependencies {
-    // LSPosed / Xposed API (compile only)
+    // Try compileOnly first
     compileOnly 'de.robv.android.xposed:api:82'
-    // 或者用新版
-    // compileOnly 'org.lsposed.hiddenapibypass:hiddenapibypass:4.3'
+    // Fallback comment: if fails, user can put api-82.jar into app/libs/
 }

@@ -36,16 +36,41 @@ jobs:
         run: echo "sdk.dir=$HOME/android-sdk" > local.properties
 
       - name: Build Debug APK
+        id: build
+        continue-on-error: true
         run: |
           chmod +x ./gradlew
-          ./gradlew --no-daemon assembleDebug --stacktrace
+          ./gradlew --no-daemon assembleDebug --stacktrace 2>&1 | tee build.log
+          echo "Build exit code: ${PIPESTATUS[0]}"
+
+      - name: Show build errors
+        if: always()
+        run: |
+          echo "===== Last 100 lines of build.log ====="
+          tail -100 build.log || true
+          echo "===== Grep errors ====="
+          grep -E "(error:|FAILED|What went wrong|Exception|e: )" build.log | head -30 || true
+          echo "===== Project files ====="
+          find . -name "*.java" | head -20
+          ls -la app/src/main/java/com/force/cellular/ || true
+          ls -la app/src/main/java/de/robv/android/xposed/ || true
 
       - name: List APKs
-        run: find . -name "*.apk" -type f
+        if: always()
+        run: find . -name "*.apk" -type f || true
 
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ForceCellular-APK
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore

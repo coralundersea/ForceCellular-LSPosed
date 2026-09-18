@@ -6,105 +6,175 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
+import java.util.Enumeration;
+import java.util.WeakHashMap;
+
 public class MainHook implements IXposedHookLoadPackage {
 
     private static final String TAG = "ForceCellular";
+    // Hardcoded Cellular only mode
+    private static final boolean SPOOF_WIFI = false;
+    private static final boolean SPOOF_CELLULAR = true;
+
+    // Cache for NetworkInterface name overrides (same technique as original)
+    private static final WeakHashMap<Object, String> nameOverrides = new WeakHashMap<>();
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
-        XposedBridge.log(TAG + ": Hooking " + lpparam.packageName);
+        XposedBridge.log(TAG + ": Loading hooks for " + lpparam.packageName);
 
         try {
-            // NetworkCapabilities.hasTransport
-            Class<?> nc = XposedHelpers.findClass("android.net.NetworkCapabilities", lpparam.classLoader);
-            XposedHelpers.findAndHookMethod(nc, "hasTransport", int.class, new XC_MethodHook() {
+            // ========== 1. NetworkCapabilities.hasTransport ==========
+            Class<?> NetworkCapabilities = XposedHelpers.findClass(
+                    "android.net.NetworkCapabilities", lpparam.classLoader);
+
+            XposedHelpers.findAndHookMethod(NetworkCapabilities, "hasTransport", int.class, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    int t = (Integer) param.args[0];
-                    if (t == 1) param.setResult(false);      // WIFI
-                    else if (t == 0) param.setResult(true);  // CELLULAR
-                    else if (t == 3) param.setResult(false); // ETHERNET
+                    int transport = (Integer) param.args[0];
+                    // 0 = CELLULAR, 1 = WIFI, 2 = BLUETOOTH, 3 = ETHERNET, 4 = VPN
+                    if (transport == 1) { // WIFI
+                        param.setResult(SPOOF_WIFI);
+                    } else if (transport == 0) { // CELLULAR
+                        param.setResult(SPOOF_CELLULAR);
+                    } else if (transport == 3) { // ETHERNET
+                        param.setResult(false);
+                    }
                 }
             });
 
-            // NetworkInfo
-            Class<?> ni = XposedHelpers.findClass("android.net.NetworkInfo", lpparam.classLoader);
-            XposedHelpers.findAndHookMethod(ni, "getType", new XC_MethodHook() {
+            // ========== 2. NetworkInfo ==========
+            Class<?> NetworkInfo = XposedHelpers.findClass("android.net.NetworkInfo", lpparam.classLoader);
+
+            XposedHelpers.findAndHookMethod(NetworkInfo, "getType", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    param.setResult(0); // TYPE_MOBILE
+                    // TYPE_MOBILE = 0, TYPE_WIFI = 1
+                    param.setResult(0); // always MOBILE
                 }
             });
-            XposedHelpers.findAndHookMethod(ni, "getTypeName", new XC_MethodHook() {
+
+            XposedHelpers.findAndHookMethod(NetworkInfo, "getTypeName", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     param.setResult("MOBILE");
                 }
             });
-            XposedHelpers.findAndHookMethod(ni, "isConnected", new XC_MethodHook() {
+
+            XposedHelpers.findAndHookMethod(NetworkInfo, "isConnected", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     param.setResult(true);
                 }
             });
 
-            // WifiManager
+            XposedHelpers.findAndHookMethod(NetworkInfo, "isConnectedOrConnecting", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    param.setResult(true);
+                }
+            });
+
+            // ========== 3. WifiManager - force WiFi disabled ==========
             try {
-                Class<?> wm = XposedHelpers.findClass("android.net.wifi.WifiManager", lpparam.classLoader);
-                XposedHelpers.findAndHookMethod(wm, "isWifiEnabled", new XC_MethodHook() {
+                Class<?> WifiManager = XposedHelpers.findClass(
+                        "android.net.wifi.WifiManager", lpparam.classLoader);
+
+                XposedHelpers.findAndHookMethod(WifiManager, "isWifiEnabled", new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
                         param.setResult(false);
                     }
                 });
-                XposedHelpers.findAndHookMethod(wm, "getWifiState", new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        param.setResult(1); // DISABLED
-                    }
-                });
-            } catch (Throwable ignored) {}
 
-            // TelephonyManager
-            try {
-                Class<?> tm = XposedHelpers.findClass("android.telephony.TelephonyManager", lpparam.classLoader);
-                XposedHelpers.findAndHookMethod(tm, "getNetworkType", new XC_MethodHook() {
+                XposedHelpers.findAndHookMethod(WifiManager, "getWifiState", new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
-                        param.setResult(13); // LTE
+                        param.setResult(1); // WIFI_STATE_DISABLED
                     }
                 });
-                XposedHelpers.findAndHookMethod(tm, "getDataNetworkType", new XC_MethodHook() {
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": WifiManager hook failed: " + t);
+            }
+
+            // ========== 4. TelephonyManager - force LTE connected ==========
+            try {
+                Class<?> TelephonyManager = XposedHelpers.findClass(
+                        "android.telephony.TelephonyManager", lpparam.classLoader);
+
+                XposedHelpers.findAndHookMethod(TelephonyManager, "getNetworkType", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        param.setResult(13); // NETWORK_TYPE_LTE
+                    }
+                });
+
+                XposedHelpers.findAndHookMethod(TelephonyManager, "getDataNetworkType", new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
                         param.setResult(13);
                     }
                 });
-                XposedHelpers.findAndHookMethod(tm, "getDataState", new XC_MethodHook() {
+
+                XposedHelpers.findAndHookMethod(TelephonyManager, "getDataState", new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
-                        param.setResult(2); // CONNECTED
+                        param.setResult(2); // DATA_CONNECTED
                     }
                 });
-            } catch (Throwable ignored) {}
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": TelephonyManager hook failed: " + t);
+            }
 
-            // NetworkInterface name
+            // ========== 5. NetworkInterface name spoof (important for some games) ==========
             try {
-                Class<?> nif = XposedHelpers.findClass("java.net.NetworkInterface", lpparam.classLoader);
-                XposedHelpers.findAndHookMethod(nif, "getName", new XC_MethodHook() {
+                // Hook getNetworkInterfaces to build name map
+                Class<?> NetworkInterface = java.net.NetworkInterface.class;
+
+                XposedBridge.hookAllMethods(NetworkInterface, "getNetworkInterfaces", new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
-                        String n = (String) param.getResult();
-                        if (n != null && (n.contains("wlan") || n.contains("eth"))) {
-                            param.setResult("rmnet_data0");
+                        try {
+                            Enumeration<?> en = (Enumeration<?>) param.getResult();
+                            if (en == null) return;
+                            while (en.hasMoreElements()) {
+                                Object ni = en.nextElement();
+                                String realName = (String) XposedHelpers.callMethod(ni, "getName");
+                                if (realName != null && (realName.contains("wlan") || realName.contains("eth") || realName.contains("wlan0"))) {
+                                    nameOverrides.put(ni, "rmnet_data0");
+                                }
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                });
+
+                XposedBridge.hookAllMethods(NetworkInterface, "getName", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        String override = nameOverrides.get(param.thisObject);
+                        if (override != null) {
+                            param.setResult(override);
                         }
                     }
                 });
-            } catch (Throwable ignored) {}
 
-            XposedBridge.log(TAG + ": Hooks applied for " + lpparam.packageName);
+                XposedBridge.hookAllMethods(NetworkInterface, "getDisplayName", new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        String override = nameOverrides.get(param.thisObject);
+                        if (override != null) {
+                            param.setResult(override);
+                        }
+                    }
+                });
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + ": NetworkInterface hook failed: " + t);
+            }
+
+            XposedBridge.log(TAG + ": All Cellular-only hooks applied for " + lpparam.packageName);
+
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": Error " + t);
+            XposedBridge.log(TAG + ": Fatal error in hooks: " + t);
         }
     }
 }

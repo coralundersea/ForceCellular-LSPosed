@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="xposed_scope">
+        <!-- 默认空，安装后在 LSPosed 里手动勾选目标 App 和系统框架 -->
+    </string-array>
+</resources>

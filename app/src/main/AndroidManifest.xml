@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.force.cellular">
+
+    <application
+        android:allowBackup="true"
+        android:label="Force Cellular"
+        android:supportsRtl="true">
+
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="强制 App 获取的网络类型为移动数据 (Cellular Only)，绕过 WiFi 检测" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+        <!-- 支持新版 LSPosed -->
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposed_scope" />
+    </application>
+
+</manifest>

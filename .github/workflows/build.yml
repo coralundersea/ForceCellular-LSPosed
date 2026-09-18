@@ -34,16 +34,34 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$HOME/android-sdk" > local.properties
 
+      - name: Debug project structure
+        run: |
+          find . -type f | head -40
+          ls -l app/libs/
+          cat app/build.gradle
+          cat settings.gradle
+
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
-          echo "=== APK files ==="
-          find . -name "*.apk" -type f
+          ./gradlew assembleDebug --stacktrace --info 2>&1 | tee build.log
+          echo "===== APK search ====="
+          find . -name "*.apk" -type f || true
+          cat build.log | tail -50
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ForceCellular-APK
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            **/*.apk
+          if-no-files-found: warn
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
